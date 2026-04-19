@@ -243,7 +243,6 @@
                 tileEl.className = `tile ${isEmpty ? 'tile-empty' : ''} ${tile.type === 'folder' ? 'folder-icon' : ''}`;
                 tileEl.style.backgroundColor = tile.color;
                 
-                // アイコンの描画
                 if (tile.icon) {
                     const iconImg = document.createElement('img');
                     iconImg.src = tile.icon;
@@ -260,7 +259,8 @@
                     if (tile.type === 'folder') {
                         openFolderModal(tile);
                     } else if (tile.url) {
-                        window.location.href = tile.url;
+                        // 新しいタブで開く
+                        window.open(tile.url, '_blank', 'noopener,noreferrer');
                     }
                 };
 
@@ -358,6 +358,9 @@
                 tile.links.forEach(link => {
                     const a = document.createElement('a');
                     a.href = link.url;
+                    // 新しいタブで開く設定
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
                     a.className = "flex items-center p-4 bg-gray-50 hover:bg-blue-50 border rounded font-bold text-blue-700 transition-colors";
                     
                     if (link.icon) {
