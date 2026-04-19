@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Workspace</title>
+    <!-- ファビコン -->
+    <link rel="icon" href="data:image/svg+xml,
+        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+            <text y='.9em' font-size='90'>🚀</text>
+        </svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0d2a4a;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-grow: 1;
+        }
+        .tile-wrapper {
+            position: relative;
+            aspect-ratio: 16 / 9;
+        }
+        .tile {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            text-align: center;
+            padding: 8px;
+            text-decoration: none;
+            color: #000;
+            border: none;
+            word-break: break-all;
+            overflow: hidden;
+        }
+        .tile:hover {
+            transform: scale(1.02);
+            opacity: 0.9;
+        }
+        .tile-empty {
+            background-color: transparent;
+            border: 1px dashed rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.3);
+        }
+        .tile-icon {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 4px;
+            object-fit: contain;
+        }
+        .edit-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .tile-wrapper:hover .edit-btn {
+            opacity: 1;
+        }
+        .memo-area {
+            background-color: #f8fafc;
+            border-radius: 8px;
+            padding: 10px 15px;
+            height: 80px;
+            width: 100%;
+            resize: none;
+            border: none;
+            font-size: 1rem;
+            outline: none;
+        }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .modal-content {
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .folder-icon::after {
+            content: " 📁";
+            font-size: 0.7rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-grid" class="grid-container"></div>
+
+    <div class="mt-auto">
+        <textarea id="memo" class="memo-area" placeholder="メモ欄（自由に入力できます。内容は自動保存されます）"></textarea>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div id="edit-modal" class="modal-overlay" onclick="closeEditModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h2 class="text-xl font-bold mb-4">タイルの編集</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">タイプ</label>
+                    <select id="edit-type" class="mt-1 block w-full border border-gray-300 rounded-md p-2" onchange="toggleEditFields()">
+                        <option value="direct">直接リンク</option>
+                        <option value="folder">リンク集（フォルダ）</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">表示タイトル</label>
+                    <input type="text" id="edit-name" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">アイコン画像URL (任意)</label>
+                    <input type="text" id="edit-icon" class="mt-1 block w-full border border-gray-300 rounded-md p-2" placeholder="https://example.com/favicon.ico">
+                </div>
+                
+                <!-- 直接リンク用 -->
+                <div id="field-url">
+                    <label class="block text-sm font-medium text-gray-700">URL</label>
+                    <input type="text" id="edit-url" class="mt-1 block w-full border border-gray-300 rounded-md p-2" placeholder="https://...">
+                </div>
+
+                <!-- リンク集用 -->
+                <div id="field-folder" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">リンク集の中身</label>
+                    <div id="folder-links-input" class="space-y-2">
+                        <!-- ここに動的に追加ボタン -->
+                    </div>
+                    <button onclick="addFolderLinkInput()" class="mt-2 text-sm text-blue-600 hover:underline">+ リンクを追加</button>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">背景色</label>
+                    <select id="edit-color" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                        <option value="#fef3c7">イエロー（パステル）</option>
+                        <option value="#ecfccb">グリーン（パステル）</option>
+                        <option value="#dbeafe">ブルー（パステル）</option>
+                        <option value="#ffedd5">オレンジ（パステル）</option>
+                        <option value="#fce7f3">ピンク（パステル）</option>
+                        <option value="#ede9fe">パープル（パステル）</option>
+                        <option value="#e0f2f1">ティール（パステル）</option>
+                        <option value="#e2e8f0">グレー</option>
+                        <option value="#fbbf24">アンバー（強）</option>
+                        <option value="#4ade80">ライトグリーン（強）</option>
+                        <option value="#60a5fa">スカイブルー（強）</option>
+                        <option value="#f87171">レッド（強）</option>
+                        <option value="#ffffff">ホワイト</option>
+                        <option value="transparent">なし（透明）</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-6 flex gap-2">
+                <button onclick="saveTileChange()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold">保存</button>
+                <button onclick="closeEditModal()" class="flex-1 bg-gray-200 py-2 rounded">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- フォルダ閲覧モーダル -->
+    <div id="folder-modal" class="modal-overlay" onclick="closeFolderModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h2 id="folder-view-title" class="text-xl font-bold mb-4 border-b pb-2"></h2>
+            <div id="folder-view-links" class="grid grid-cols-1 gap-3"></div>
+            <button onclick="closeFolderModal()" class="mt-6 w-full py-2 bg-gray-100 rounded">閉じる</button>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'portal_tiles_v3';
+        const TOTAL_TILES = 40; 
+        
+        let tilesData = [];
+        let currentEditId = null;
+
+        function loadData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                tilesData = JSON.parse(saved);
+                if (tilesData.length < TOTAL_TILES) {
+                    for (let i = tilesData.length; i < TOTAL_TILES; i++) {
+                        tilesData.push({ id: i, name: '', url: '', icon: '', color: 'transparent', type: 'direct', links: [] });
+                    }
+                }
+            } else {
+                tilesData = Array.from({ length: TOTAL_TILES }, (_, i) => ({
+                    id: i, name: '', url: '', icon: '', color: 'transparent', type: 'direct', links: []
+                }));
+            }
+        }
+
+        function renderTiles() {
+            const container = document.getElementById('main-grid');
+            container.innerHTML = '';
+
+            tilesData.forEach(tile => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'tile-wrapper';
+
+                const isEmpty = !tile.name && !tile.url && (!tile.links || tile.links.length === 0);
+                
+                const tileEl = document.createElement('div');
+                tileEl.className = `tile ${isEmpty ? 'tile-empty' : ''} ${tile.type === 'folder' ? 'folder-icon' : ''}`;
+                tileEl.style.backgroundColor = tile.color;
+                
+                // アイコンの描画
+                if (tile.icon) {
+                    const iconImg = document.createElement('img');
+                    iconImg.src = tile.icon;
+                    iconImg.className = 'tile-icon';
+                    iconImg.onerror = () => iconImg.style.display = 'none';
+                    tileEl.appendChild(iconImg);
+                }
+
+                const label = document.createElement('span');
+                label.innerText = tile.name || (isEmpty ? '+' : '');
+                tileEl.appendChild(label);
+                
+                tileEl.onclick = () => {
+                    if (tile.type === 'folder') {
+                        openFolderModal(tile);
+                    } else if (tile.url) {
+                        window.location.href = tile.url;
+                    }
+                };
+
+                const editBtn = document.createElement('div');
+                editBtn.className = 'edit-btn';
+                editBtn.innerHTML = '✎';
+                editBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openEditModal(tile.id);
+                };
+
+                wrapper.appendChild(tileEl);
+                wrapper.appendChild(editBtn);
+                container.appendChild(wrapper);
+            });
+        }
+
+        function toggleEditFields() {
+            const type = document.getElementById('edit-type').value;
+            document.getElementById('field-url').classList.toggle('hidden', type !== 'direct');
+            document.getElementById('field-folder').classList.toggle('hidden', type !== 'folder');
+        }
+
+        function addFolderLinkInput(name = '', url = '', icon = '') {
+            const container = document.getElementById('folder-links-input');
+            const div = document.createElement('div');
+            div.className = 'border p-2 rounded mb-2 folder-link-item bg-gray-50';
+            div.innerHTML = `
+                <div class="flex gap-2 mb-1">
+                    <input type="text" placeholder="名前" value="${name}" class="link-name flex-1 border rounded p-1 text-xs">
+                    <button onclick="this.closest('.folder-link-item').remove()" class="text-red-500 font-bold px-1">×</button>
+                </div>
+                <input type="text" placeholder="URL" value="${url}" class="link-url w-full border rounded p-1 text-xs mb-1">
+                <input type="text" placeholder="アイコンURL" value="${icon}" class="link-icon w-full border rounded p-1 text-xs">
+            `;
+            container.appendChild(div);
+        }
+
+        function openEditModal(id) {
+            currentEditId = id;
+            const tile = tilesData.find(t => t.id === id);
+            document.getElementById('edit-name').value = tile.name || '';
+            document.getElementById('edit-url').value = tile.url || '';
+            document.getElementById('edit-icon').value = tile.icon || '';
+            document.getElementById('edit-type').value = tile.type || 'direct';
+            document.getElementById('edit-color').value = tile.color || 'transparent';
+            
+            const folderInput = document.getElementById('folder-links-input');
+            folderInput.innerHTML = '';
+            if (tile.links && tile.links.length > 0) {
+                tile.links.forEach(l => addFolderLinkInput(l.name, l.url, l.icon));
+            } else {
+                addFolderLinkInput();
+            }
+
+            toggleEditFields();
+            document.getElementById('edit-modal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+
+        function saveTileChange() {
+            const type = document.getElementById('edit-type').value;
+            const name = document.getElementById('edit-name').value;
+            const url = document.getElementById('edit-url').value;
+            const icon = document.getElementById('edit-icon').value;
+            const color = document.getElementById('edit-color').value;
+            
+            let links = [];
+            if (type === 'folder') {
+                document.querySelectorAll('.folder-link-item').forEach(item => {
+                    const lName = item.querySelector('.link-name').value;
+                    const lUrl = item.querySelector('.link-url').value;
+                    const lIcon = item.querySelector('.link-icon').value;
+                    if (lName || lUrl) links.push({ name: lName, url: lUrl, icon: lIcon });
+                });
+            }
+
+            const index = tilesData.findIndex(t => t.id === currentEditId);
+            tilesData[index] = { id: currentEditId, name, url, icon, color, type, links };
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tilesData));
+            renderTiles();
+            closeEditModal();
+        }
+
+        function openFolderModal(tile) {
+            document.getElementById('folder-view-title').innerText = tile.name;
+            const container = document.getElementById('folder-view-links');
+            container.innerHTML = '';
+            
+            if (tile.links && tile.links.length > 0) {
+                tile.links.forEach(link => {
+                    const a = document.createElement('a');
+                    a.href = link.url;
+                    a.className = "flex items-center p-4 bg-gray-50 hover:bg-blue-50 border rounded font-bold text-blue-700 transition-colors";
+                    
+                    if (link.icon) {
+                        const iconImg = document.createElement('img');
+                        iconImg.src = link.icon;
+                        iconImg.className = 'w-5 h-5 mr-3 object-contain';
+                        a.appendChild(iconImg);
+                    }
+                    
+                    const span = document.createElement('span');
+                    span.innerText = link.name || link.url;
+                    a.appendChild(span);
+                    
+                    container.appendChild(a);
+                });
+            } else {
+                container.innerHTML = '<p class="text-center text-gray-400 py-4">リンクがありません</p>';
+            }
+            document.getElementById('folder-modal').style.display = 'flex';
+        }
+
+        function closeFolderModal() {
+            document.getElementById('folder-modal').style.display = 'none';
+        }
+
+        const memoEl = document.getElementById('memo');
+        function initMemo() {
+            const saved = localStorage.getItem('portal_memo');
+            if (saved) memoEl.value = saved;
+            memoEl.addEventListener('input', () => localStorage.setItem('portal_memo', memoEl.value));
+        }
+
+        window.onload = () => {
+            loadData();
+            renderTiles();
+            initMemo();
+        };
+    </script>
+</body>
+</html>
